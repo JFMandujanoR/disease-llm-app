@@ -1,30 +1,38 @@
-import React, { useState } from "react";
-import MapView from "./MapView.jsx";
-import axios from "axios";
+import React, { useEffect, useState } from "react";
+import MapView from "./components/MapView";
+import { fetchDiseases, fetchData } from "./api";
 
-export default function App() {
-  const [query, setQuery] = useState("");
-  const [answer, setAnswer] = useState("");
+function App() {
+  const [disease, setDisease] = useState("cases");
+  const [data, setData] = useState([]);
+  const [diseases, setDiseases] = useState([]);
 
-  const askLLM = async () => {
-    const res = await axios.get(`/api/answer`, { params: { query } });
-    setAnswer(res.data.answer);
-  };
+  useEffect(() => {
+    fetchDiseases().then((res) => setDiseases(res.diseases));
+  }, []);
+
+  useEffect(() => {
+    fetchData(disease).then((res) => setData(res));
+  }, [disease]);
 
   return (
-    <div>
-      <h1>Disease LLM Explorer</h1>
-      <MapView />
-      <div>
-        <input
-          type="text"
-          value={query}
-          onChange={(e)=>setQuery(e.target.value)}
-          placeholder="Ask about COVID trends..."
-        />
-        <button onClick={askLLM}>Ask</button>
-        <p>{answer}</p>
-      </div>
+    <div className="app">
+      <h1>Disease LLM Explorer 🦠</h1>
+
+      <label>
+        Select disease:
+        <select value={disease} onChange={(e) => setDisease(e.target.value)}>
+          {diseases.map((d) => (
+            <option key={d} value={d}>
+              {d}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <MapView data={data} />
     </div>
   );
 }
+
+export default App;

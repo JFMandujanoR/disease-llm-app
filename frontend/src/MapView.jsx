@@ -1,34 +1,25 @@
-import React, { useEffect, useState } from "react";
+import React from "react";
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
-import axios from "axios";
 
-export default function MapView() {
-  const [points, setPoints] = useState([]);
-
-  useEffect(() => {
-    async function fetchData() {
-      const res = await axios.get(`/api/map-data`, {
-        params: { start: "2020-03-01", end: "2020-04-01" }
-      });
-      setPoints(res.data.features);
-    }
-    fetchData();
-  }, []);
+function MapView({ data }) {
+  const center = [37.8, -96]; // USA center
 
   return (
-    <MapContainer center={[20, 0]} zoom={2} style={{height:"400px",width:"100%"}}>
+    <MapContainer center={center} zoom={4} style={{ height: "500px", width: "100%" }}>
       <TileLayer
-        attribution='&copy; OpenStreetMap'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        attribution="&copy; OpenStreetMap contributors"
       />
-      {points.map((f,i)=>(
-        <Marker key={i} position={[f.geometry.coordinates[1], f.geometry.coordinates[0]]}>
+      {data.map((row, idx) => (
+        <Marker key={idx} position={[row.lat, row.lon]}>
           <Popup>
-            {f.properties.country} - {f.properties.province || "N/A"}<br/>
-            Cases: {f.properties.cases}
+            <strong>{row.state}</strong> <br />
+            {row.date}: {row.cases ?? row.deaths}
           </Popup>
         </Marker>
       ))}
     </MapContainer>
   );
 }
+
+export default MapView;

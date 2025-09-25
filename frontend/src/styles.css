@@ -1,0 +1,26 @@
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: #f7f7f7;
+  color: #333;
+}
+
+.app {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+h1 {
+  text-align: center;
+}
+
+label {
+  display: block;
+  margin: 1rem 0;
+}
+
+select {
+  margin-left: 1rem;
+  padding: 0.3rem;
+}
