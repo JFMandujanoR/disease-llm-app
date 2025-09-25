@@ -1,35 +1,40 @@
-from fastapi import FastAPI, Query
+import os
 import pandas as pd
 import geopandas as gpd
 from shapely.geometry import Point
-import os, json
-import openai  # or swap for Hugging Face
+from fastapi import FastAPI
+import json
+import openai
 
 app = FastAPI()
 
-# load preprocessed parquet
-DATA_PATH = os.path.join(os.path.dirname(__file__), "data/jhu_covid_confirmed.parquet")
+# Use the processed sample data
+DATA_PATH = os.path.join(os.path.dirname(__file__), "data/processed.parquet")
+
+# Check file exists
+if not os.path.exists(DATA_PATH):
+    raise FileNotFoundError(f"{DATA_PATH} not found. Make sure ingest.py has run or processed.parquet is committed.")
+
 df = pd.read_parquet(DATA_PATH)
-gdf = gpd.GeoDataFrame(df, geometry=gpd.points_from_xy(df.lon, df.lat), crs="EPSG:4326")
+gdf = gpd.GeoDataFrame(df, geometry=gpd.points_from_xy(df.get("lon", 0), df.get("lat", 0)), crs="EPSG:4326")
 
 @app.get("/map-data")
-def map_data(start: str, end: str, country: str = None):
+def map_data(start: str, end: str, state: str = None):
     s, e = pd.to_datetime(start), pd.to_datetime(end)
     subset = gdf[(gdf['date'] >= s) & (gdf['date'] <= e)]
-    if country:
-        subset = subset[subset['country'] == country]
-    agg = subset.groupby(['country','province','lat','lon']).agg({'cases':'sum'}).reset_index()
-    agg_gdf = gpd.GeoDataFrame(agg, geometry=gpd.points_from_xy(agg.lon, agg.lat), crs="EPSG:4326")
+    if state:
+        subset = subset[subset['state'] == state]
+    # Aggregate by state
+    agg = subset.groupby(['state']).agg({'cases':'sum'}).reset_index()
+    # Create GeoDataFrame with dummy coordinates for display
+    agg['lat'] = 0  # placeholder
+    agg['lon'] = 0
+    agg_gdf = gpd.GeoDataFrame(agg, geometry=gpd.points_from_xy(agg.lon, agg.lat))
     return json.loads(agg_gdf.to_json())
 
 @app.get("/answer")
 def answer(query: str):
-    """
-    Stub: pass query + small stats to an LLM.
-    You must set OPENAI_API_KEY in Render environment.
-    """
     openai.api_key = os.getenv("OPENAI_API_KEY")
-
     prompt = f"User asked: {query}\n\nAnswer as a public health analyst."
     try:
         resp = openai.ChatCompletion.create(
