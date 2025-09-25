@@ -16,7 +16,7 @@ app.add_middleware(
 )
 
 # Load dataset
-DATA_PATH = os.path.join("data", "processed.parquet")
+DATA_PATH = os.path.join("backend", "data", "processed.parquet")
 df = pd.read_parquet(DATA_PATH)
 
 # Example state centroids (expand this dict as needed)
