@@ -1,47 +1,58 @@
-import os
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
 import geopandas as gpd
-from shapely.geometry import Point
-from fastapi import FastAPI
-import json
-import openai
+import os
 
 app = FastAPI()
 
-# Use the processed sample data
-DATA_PATH = os.path.join(os.path.dirname(__file__), "data/processed.parquet")
+# Allow CORS so frontend can call backend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-# Check file exists
-if not os.path.exists(DATA_PATH):
-    raise FileNotFoundError(f"{DATA_PATH} not found. Make sure ingest.py has run or processed.parquet is committed.")
-
+# Load dataset
+DATA_PATH = os.path.join("data", "processed.parquet")
 df = pd.read_parquet(DATA_PATH)
-gdf = gpd.GeoDataFrame(df, geometry=gpd.points_from_xy(df.get("lon", 0), df.get("lat", 0)), crs="EPSG:4326")
 
-@app.get("/map-data")
-def map_data(start: str, end: str, state: str = None):
-    s, e = pd.to_datetime(start), pd.to_datetime(end)
-    subset = gdf[(gdf['date'] >= s) & (gdf['date'] <= e)]
-    if state:
-        subset = subset[subset['state'] == state]
-    # Aggregate by state
-    agg = subset.groupby(['state']).agg({'cases':'sum'}).reset_index()
-    # Create GeoDataFrame with dummy coordinates for display
-    agg['lat'] = 0  # placeholder
-    agg['lon'] = 0
-    agg_gdf = gpd.GeoDataFrame(agg, geometry=gpd.points_from_xy(agg.lon, agg.lat))
-    return json.loads(agg_gdf.to_json())
+# Example state centroids (expand this dict as needed)
+state_coords = {
+    "New York": (-74.0059, 40.7128),
+    "California": (-119.4179, 36.7783),
+    "Texas": (-99.9018, 31.9686),
+}
 
-@app.get("/answer")
-def answer(query: str):
-    openai.api_key = os.getenv("OPENAI_API_KEY")
-    prompt = f"User asked: {query}\n\nAnswer as a public health analyst."
-    try:
-        resp = openai.ChatCompletion.create(
-            model="gpt-4o-mini",
-            messages=[{"role":"system","content":"You are an epidemiology assistant."},
-                      {"role":"user","content": prompt}]
-        )
-        return {"answer": resp["choices"][0]["message"]["content"]}
-    except Exception as e:
-        return {"answer": f"(Stub) Could not call model. Query was: {query}"}
+# Add lon/lat columns
+df["lon"] = df["state"].map(lambda s: state_coords.get(s, (0, 0))[0])
+df["lat"] = df["state"].map(lambda s: state_coords.get(s, (0, 0))[1])
+
+# Convert to GeoDataFrame
+gdf = gpd.GeoDataFrame(
+    df,
+    geometry=gpd.points_from_xy(df["lon"], df["lat"]),
+    crs="EPSG:4326"
+)
+
+
+@app.get("/api/diseases")
+def get_diseases():
+    """Return list of available diseases (from columns)."""
+    # Right now dataset only has 'cases' and 'deaths'
+    return {"diseases": ["cases", "deaths"]}
+
+
+@app.get("/api/data")
+def get_data(disease: str = "cases", start: str = None, end: str = None):
+    """Return disease data filtered by time range."""
+    data = df.copy()
+
+    if start:
+        data = data[data["date"] >= start]
+    if end:
+        data = data[data["date"] <= end]
+
+    return data[["date", "state", disease, "lat", "lon"]].to_dict(orient="records")
