@@ -1,8 +1,8 @@
 import pandas as pd
 import os
 
-DATA_PATH = "backend/data/covid_sample.csv"
-PROCESSED_PATH = "backend/data/processed.parquet"
+DATA_PATH = "data/covid_sample.csv"
+PROCESSED_PATH = "data/processed.parquet"
 
 def main():
     if not os.path.exists(DATA_PATH):
