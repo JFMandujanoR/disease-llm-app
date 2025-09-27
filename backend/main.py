@@ -1,8 +1,9 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import pandas as pd
 import os
+import openai
 
 app = FastAPI()
 
@@ -15,7 +16,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# === API routes ===
+# === Load data ===
 DATA_PATH = os.path.join(os.path.dirname(__file__), "data", "processed.parquet")
 df = pd.read_parquet(DATA_PATH)
 
@@ -24,10 +25,10 @@ state_coords = {
     "California": (-119.4179, 36.7783),
     "Texas": (-99.9018, 31.9686),
 }
-
 df["lon"] = df["state"].map(lambda s: state_coords.get(s, (0, 0))[0])
 df["lat"] = df["state"].map(lambda s: state_coords.get(s, (0, 0))[1])
 
+# === API routes ===
 @app.get("/api/diseases")
 def get_diseases():
     return {"diseases": ["cases", "deaths"]}
@@ -40,6 +41,42 @@ def get_data(disease: str = "cases", start: str = None, end: str = None):
     if end:
         data = data[data["date"] <= end]
     return data[["date", "state", disease, "lat", "lon"]].to_dict(orient="records")
+
+# === LLM Q&A route ===
+@app.post("/api/ask")
+async def ask_question(request: Request):
+    body = await request.json()
+    question = body.get("question", "")
+
+    # Summarize dataset to give LLM context
+    summary = df.groupby(["date", "state"])[["cases", "deaths"]].sum().reset_index()
+    stats_text = summary.head(50).to_csv(index=False)  # send first 50 rows only
+
+    system_prompt = """You are a helpful assistant answering questions 
+    about a spatiotemporal disease dataset with cases and deaths per state over time.
+    Use the dataset provided to answer clearly and concisely."""
+
+    # Check if API key is available
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        return {"answer": "No OPENAI_API_KEY found. Please set it in Render."}
+
+    openai.api_key = api_key
+
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"Here is the dataset sample:\n{stats_text}"},
+                {"role": "user", "content": f"Question: {question}"},
+            ],
+        )
+        answer = response["choices"][0]["message"]["content"]
+    except Exception as e:
+        answer = f"Error: {e}"
+
+    return {"answer": answer}
 
 # === Serve frontend (MOUNT LAST) ===
 frontend_path = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")

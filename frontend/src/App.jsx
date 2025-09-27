@@ -1,8 +1,10 @@
+// frontend/src/App.jsx
 import React, { useEffect, useState } from "react";
-import MapView from "./MapView.jsx";
+import MapView from "./MapView";
 import { fetchDiseases, fetchData } from "./api";
+import QABox from "./QABox";
 
-function App() {
+export default function App() {
   const [disease, setDisease] = useState("cases");
   const [data, setData] = useState([]);
   const [diseases, setDiseases] = useState([]);
@@ -31,8 +33,7 @@ function App() {
       </label>
 
       <MapView data={data} />
+      <QABox />
     </div>
   );
 }
-
-export default App;
