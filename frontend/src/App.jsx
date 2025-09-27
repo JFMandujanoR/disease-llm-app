@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import MapView from "./components/MapView";
+import MapView from "./MapView.jsx";
 import { fetchDiseases, fetchData } from "./api";
 
 function App() {
