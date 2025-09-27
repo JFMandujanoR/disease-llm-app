@@ -84,7 +84,7 @@ export default function App() {
               No data available.
             </p>
           ) : (
-            <MapView data={data} />
+            <MapView data={data} disease={disease} />
           )}
         </div>
 
