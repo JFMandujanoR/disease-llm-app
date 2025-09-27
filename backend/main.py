@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import pandas as pd
 import os
-import openai
+from openai import OpenAI
 
 app = FastAPI()
 
@@ -28,6 +28,9 @@ state_coords = {
 df["lon"] = df["state"].map(lambda s: state_coords.get(s, (0, 0))[0])
 df["lat"] = df["state"].map(lambda s: state_coords.get(s, (0, 0))[1])
 
+# === Conversation memory (in-memory) ===
+conversation_history = []
+
 # === API routes ===
 @app.get("/api/diseases")
 def get_diseases():
@@ -42,37 +45,40 @@ def get_data(disease: str = "cases", start: str = None, end: str = None):
         data = data[data["date"] <= end]
     return data[["date", "state", disease, "lat", "lon"]].to_dict(orient="records")
 
-# === LLM Q&A route ===
+# === LLM Q&A route with memory ===
 @app.post("/api/ask")
 async def ask_question(request: Request):
     body = await request.json()
     question = body.get("question", "")
 
-    # Summarize dataset to give LLM context
+    # Summarize dataset to give LLM context (only first 50 rows)
     summary = df.groupby(["date", "state"])[["cases", "deaths"]].sum().reset_index()
-    stats_text = summary.head(50).to_csv(index=False)  # send first 50 rows only
+    stats_text = summary.head(50).to_csv(index=False)
 
     system_prompt = """You are a helpful assistant answering questions 
     about a spatiotemporal disease dataset with cases and deaths per state over time.
     Use the dataset provided to answer clearly and concisely."""
 
-    # Check if API key is available
+    # Check API key
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         return {"answer": "No OPENAI_API_KEY found. Please set it in Render."}
 
-    openai.api_key = api_key
+    client = OpenAI(api_key=api_key)
+
+    # Add current user message to conversation
+    conversation_history.append({"role": "user", "content": f"Question: {question}"})
 
     try:
-        response = openai.ChatCompletion.create(
+        response = client.chat.completions.create(
             model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"Here is the dataset sample:\n{stats_text}"},
-                {"role": "user", "content": f"Question: {question}"},
-            ],
+            messages=[{"role": "system", "content": system_prompt},
+                      {"role": "user", "content": f"Dataset sample:\n{stats_text}"}] + conversation_history,
         )
-        answer = response["choices"][0]["message"]["content"]
+        answer = response.choices[0].message.content
+
+        # Add assistant response to conversation memory
+        conversation_history.append({"role": "assistant", "content": answer})
     except Exception as e:
         answer = f"Error: {e}"
 
