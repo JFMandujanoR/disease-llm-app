@@ -1,7 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
 import pandas as pd
 import os
 
@@ -15,11 +14,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# === Serve frontend ===
-frontend_path = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
-if os.path.exists(frontend_path):
-    app.mount("/", StaticFiles(directory=frontend_path, html=True), name="frontend")
 
 # === API routes ===
 DATA_PATH = os.path.join(os.path.dirname(__file__), "data", "processed.parquet")
@@ -46,3 +40,8 @@ def get_data(disease: str = "cases", start: str = None, end: str = None):
     if end:
         data = data[data["date"] <= end]
     return data[["date", "state", disease, "lat", "lon"]].to_dict(orient="records")
+
+# === Serve frontend (MOUNT LAST) ===
+frontend_path = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
+if os.path.exists(frontend_path):
+    app.mount("/", StaticFiles(directory=frontend_path, html=True), name="frontend")
