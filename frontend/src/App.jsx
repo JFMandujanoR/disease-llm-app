@@ -5,26 +5,44 @@ import QABox from "./QABox";
 import { fetchDiseases, fetchData } from "./api";
 
 export default function App() {
-  const [disease, setDisease] = useState("cases");
+  const [disease, setDisease] = useState("cases"); // currently "cases" or "deaths"
   const [data, setData] = useState([]);
   const [diseases, setDiseases] = useState([]);
+  const [loading, setLoading] = useState(false);
 
   // Load available metrics (currently only "cases" and "deaths")
   useEffect(() => {
-    fetchDiseases().then((res) => setDiseases(res.diseases));
+    fetchDiseases()
+      .then((res) => {
+        setDiseases(res.diseases || []);
+        if (!res.diseases.includes(disease)) {
+          setDisease(res.diseases[0] || "cases");
+        }
+      })
+      .catch((err) => console.error("Error fetching diseases:", err));
   }, []);
 
   // Fetch data whenever the selected metric changes
   useEffect(() => {
-    fetchData(disease).then((res) => setData(res));
+    if (!disease) return;
+    setLoading(true);
+    fetchData(disease)
+      .then((res) => {
+        setData(res);
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error("Error fetching data:", err);
+        setData([]);
+        setLoading(false);
+      });
   }, [disease]);
 
   return (
     <div style={{ padding: "1rem" }}>
       <h1>Disease LLM Explorer 🦠</h1>
 
-      {/* Currently selecting metric: "cases" or "deaths" */}
-      {/* In the future, this dropdown can select between multiple diseases */}
+      {/* Metric selector */}
       <label style={{ display: "block", marginBottom: "1rem" }}>
         Select metric to visualize:
         <select
@@ -48,8 +66,26 @@ export default function App() {
         }}
       >
         {/* Map on the left */}
-        <div style={{ flex: 2, border: "1px solid #ccc", borderRadius: "8px" }}>
-          <MapView data={data} />
+        <div
+          style={{
+            flex: 2,
+            border: "1px solid #ccc",
+            borderRadius: "8px",
+            display: "flex",
+            flexDirection: "column",
+          }}
+        >
+          {loading ? (
+            <p style={{ textAlign: "center", marginTop: "1rem" }}>
+              Loading data...
+            </p>
+          ) : data.length === 0 ? (
+            <p style={{ textAlign: "center", marginTop: "1rem" }}>
+              No data available.
+            </p>
+          ) : (
+            <MapView data={data} />
+          )}
         </div>
 
         {/* Chat on the right */}

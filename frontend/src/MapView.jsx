@@ -1,36 +1,27 @@
 // frontend/src/MapView.jsx
-
-import React, { useEffect, useState } from "react";
+import React, { useState, useMemo } from "react";
 import { MapContainer, TileLayer, CircleMarker, Tooltip } from "react-leaflet";
 
-export default function MapView() {
-  const [disease, setDisease] = useState("cases");
-  const [data, setData] = useState([]);
+export default function MapView({ data, disease }) {
   const [timeIndex, setTimeIndex] = useState(0);
 
-  useEffect(() => {
-    fetch(`/api/data?disease=${disease}`)
-      .then((res) => res.json())
-      .then((json) => {
-        setData(json);
-        setTimeIndex(0);
-      });
-  }, [disease]);
-
-  if (data.length === 0) return <p>Loading data...</p>;
+  if (!data || data.length === 0) return <p>Loading data...</p>;
 
   // extract unique dates in sorted order
-  const dates = [...new Set(data.map((d) => d.date))].sort();
+  const dates = useMemo(() => [...new Set(data.map((d) => d.date))].sort(), [data]);
   const currentDate = dates[timeIndex];
 
   // filter records for selected date
-  const currentData = data.filter((d) => d.date === currentDate);
+  const currentData = useMemo(
+    () => data.filter((d) => d.date === currentDate),
+    [data, currentDate]
+  );
 
   return (
-    <div>
+    <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
       <h2>Disease Map - {disease}</h2>
 
-      <MapContainer center={[37.8, -96]} zoom={4} style={{ height: "500px" }}>
+      <MapContainer center={[37.8, -96]} zoom={4} style={{ flex: 1 }}>
         <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
         {currentData.map((d, i) => (
           <CircleMarker
@@ -56,14 +47,9 @@ export default function MapView() {
           max={dates.length - 1}
           value={timeIndex}
           onChange={(e) => setTimeIndex(Number(e.target.value))}
+          style={{ width: "100%" }}
         />
-        <p>{currentDate}</p>
-      </div>
-
-      {/* Buttons to switch dataset */}
-      <div style={{ marginTop: "1rem" }}>
-        <button onClick={() => setDisease("cases")}>Cases</button>
-        <button onClick={() => setDisease("deaths")}>Deaths</button>
+        <p style={{ textAlign: "center" }}>{currentDate}</p>
       </div>
     </div>
   );
