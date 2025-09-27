@@ -9,10 +9,12 @@ export default function App() {
   const [data, setData] = useState([]);
   const [diseases, setDiseases] = useState([]);
 
+  // Load available metrics (currently only "cases" and "deaths")
   useEffect(() => {
     fetchDiseases().then((res) => setDiseases(res.diseases));
   }, []);
 
+  // Fetch data whenever the selected metric changes
   useEffect(() => {
     fetchData(disease).then((res) => setData(res));
   }, [disease]);
@@ -21,8 +23,10 @@ export default function App() {
     <div style={{ padding: "1rem" }}>
       <h1>Disease LLM Explorer 🦠</h1>
 
+      {/* Currently selecting metric: "cases" or "deaths" */}
+      {/* In the future, this dropdown can select between multiple diseases */}
       <label style={{ display: "block", marginBottom: "1rem" }}>
-        Select disease:
+        Select metric to visualize:
         <select
           value={disease}
           onChange={(e) => setDisease(e.target.value)}
