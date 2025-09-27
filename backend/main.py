@@ -77,6 +77,32 @@ state_coords = {
 df["lon"] = df["state"].map(lambda s: state_coords.get(s, (0, 0))[0])
 df["lat"] = df["state"].map(lambda s: state_coords.get(s, (0, 0))[1])
 
+# === Precompute spatiotemporal summaries ===
+summary = df.groupby(["date", "state"])[["cases", "deaths"]].sum().reset_index()
+
+# Temporal trends: month-to-month difference per state
+summary_sorted = summary.sort_values(["state", "date"])
+summary_sorted["cases_diff"] = summary_sorted.groupby("state")["cases"].diff().fillna(0)
+summary_sorted["deaths_diff"] = summary_sorted.groupby("state")["deaths"].diff().fillna(0)
+
+# Global monthly totals
+global_totals = summary.groupby("date")[["cases", "deaths"]].sum().reset_index()
+
+# Spatial correlation per month (cases across states)
+spatial_corrs = summary.pivot(index="state", columns="date", values="cases").corr().fillna(0)
+
+# Precomputed summary text to provide to LLM
+stats_text = (
+    "You can answer questions about cases and deaths per state over time, "
+    "identify temporal trends, compute spatial correlations between states, "
+    "and compare different months or regions.\n\n"
+    "Global totals per month:\n" + global_totals.to_csv(index=False) + "\n"
+    "Sample state-level data (including month-to-month differences):\n" +
+    summary_sorted.head(50).to_csv(index=False) + "\n"
+    "Spatial correlation between states (cases):\n" +
+    spatial_corrs.head(5).to_csv()
+)
+
 # === Conversation memory (in-memory) ===
 conversation_history = []
 
@@ -100,38 +126,34 @@ async def ask_question(request: Request):
     body = await request.json()
     question = body.get("question", "")
 
-    # Summarize dataset to give LLM context (only first 50 rows)
-    summary = df.groupby(["date", "state"])[["cases", "deaths"]].sum().reset_index()
-    stats_text = summary.head(50).to_csv(index=False)
+    system_prompt = (
+        "You are a helpful assistant answering questions about a spatiotemporal disease dataset "
+        "with cases and deaths per state over time. "
+        "You can answer questions about trends, correlations, totals, and comparisons. "
+        "Use the dataset provided to answer clearly and concisely."
+    )
 
-    system_prompt = """You are a helpful assistant answering questions 
-    about a spatiotemporal disease dataset with cases and deaths per state over time.
-    Use the dataset provided to answer clearly and concisely."""
-
-    # Check API key
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         return {"answer": "No OPENAI_API_KEY found. Please set it in Render."}
 
     client = OpenAI(api_key=api_key)
 
-    # Add current user message to conversation
-    conversation_history.append({"role": "user", "content": f"Question: {question}"})
-
     try:
         response = client.chat.completions.create(
             model="gpt-4o-mini",
-            messages=[{"role": "system", "content": system_prompt},
-                      {"role": "user", "content": f"Dataset sample:\n{stats_text}"}] + conversation_history,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": stats_text},
+                {"role": "user", "content": f"Question: {question}"},
+            ],
         )
         answer = response.choices[0].message.content
-
-        # Add assistant response to conversation memory
-        conversation_history.append({"role": "assistant", "content": answer})
     except Exception as e:
         answer = f"Error: {e}"
 
     return {"answer": answer}
+
 
 # === Serve frontend (MOUNT LAST) ===
 frontend_path = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
