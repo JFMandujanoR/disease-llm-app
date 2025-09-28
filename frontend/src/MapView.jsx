@@ -2,24 +2,30 @@
 import React, { useState, useMemo } from "react";
 import { MapContainer, TileLayer, CircleMarker, Tooltip } from "react-leaflet";
 
-export default function MapView({ data, disease }) {
+export default function MapView({ data, disease, metric }) {
   const [timeIndex, setTimeIndex] = useState(0);
 
   if (!data || data.length === 0) return <p>Loading data...</p>;
 
-  // extract unique dates in sorted order
+  // Determine the field to visualize
+  const valueField = disease === "covid19" ? metric : "value";
+
+  // Extract unique dates in sorted order
   const dates = useMemo(() => [...new Set(data.map((d) => d.date))].sort(), [data]);
   const currentDate = dates[timeIndex];
 
-  // filter records for selected date
+  // Filter records for selected date
   const currentData = useMemo(
     () => data.filter((d) => d.date === currentDate),
     [data, currentDate]
   );
 
+  // Optional: color scheme based on dataset
+  const fillColor = disease === "covid19" ? "red" : "blue";
+
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
-      <h2>Disease Map - {disease}</h2>
+      <h2>Disease Map - {disease.toUpperCase()}</h2>
 
       <MapContainer center={[37.8, -96]} zoom={4} style={{ flex: 1 }}>
         <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
@@ -27,13 +33,13 @@ export default function MapView({ data, disease }) {
           <CircleMarker
             key={i}
             center={[d.lat, d.lon]}
-            radius={Math.sqrt(d[disease]) / 100 + 5} // scale marker size
-            fillColor="red"
+            radius={Math.sqrt(d[valueField] || 0) / 100 + 5} // scale marker size
+            fillColor={fillColor}
             fillOpacity={0.5}
             stroke={false}
           >
             <Tooltip>
-              {`${d.state} | ${disease}: ${d[disease]} | Date: ${d.date}`}
+              {`${d.state || d.location_name} | ${valueField}: ${d[valueField]} | Date: ${d.date}`}
             </Tooltip>
           </CircleMarker>
         ))}

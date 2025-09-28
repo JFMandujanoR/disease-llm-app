@@ -80,18 +80,14 @@ df["lat"] = df["state"].map(lambda s: state_coords.get(s, (0, 0))[1])
 # === Precompute spatiotemporal summaries ===
 summary = df.groupby(["date", "state"])[["cases", "deaths"]].sum().reset_index()
 
-# Temporal trends: month-to-month difference per state
 summary_sorted = summary.sort_values(["state", "date"])
 summary_sorted["cases_diff"] = summary_sorted.groupby("state")["cases"].diff().fillna(0)
 summary_sorted["deaths_diff"] = summary_sorted.groupby("state")["deaths"].diff().fillna(0)
 
-# Global monthly totals
 global_totals = summary.groupby("date")[["cases", "deaths"]].sum().reset_index()
 
-# Spatial correlation per month (cases across states)
 spatial_corrs = summary.pivot(index="state", columns="date", values="cases").corr().fillna(0)
 
-# Precomputed summary text to provide to LLM
 stats_text = (
     "You can answer questions about cases and deaths per state over time, "
     "identify temporal trends, compute spatial correlations between states, "
@@ -120,6 +116,37 @@ def get_data(disease: str = "cases", start: str = None, end: str = None):
         data = data[data["date"] <= end]
     return data[["date", "state", disease, "lat", "lon"]].to_dict(orient="records")
 
+@app.get("/api/diseases")
+def get_diseases():
+    return {"diseases": ["covid19", "measles"]}
+
+@app.get("/api/data")
+def get_data(disease: str = "covid19", start: str = None, end: str = None):
+    if disease == "covid19":
+        data_path = os.path.join(os.path.dirname(__file__), "data", "processed.parquet")
+    elif disease == "measles":
+        data_path = os.path.join(os.path.dirname(__file__), "data", "measles.parquet")
+    else:
+        return {"error": "Disease not supported"}
+
+    data = pd.read_parquet(data_path)
+
+    if start:
+        data = data[data["date"] >= start]
+    if end:
+        data = data[data["date"] <= end]
+
+    # Try to infer columns
+    if "cases" in data.columns:
+        disease_col = "cases"
+    elif "value" in data.columns:  # measles format
+        disease_col = "value"
+    else:
+        return {"error": "Disease column not found"}
+
+    return data[["date", "state", disease_col, "lat", "lon"]].to_dict(orient="records")
+
+
 # === LLM Q&A route with memory ===
 @app.post("/api/ask")
 async def ask_question(request: Request):
@@ -139,21 +166,26 @@ async def ask_question(request: Request):
 
     client = OpenAI(api_key=api_key)
 
+    # Add user message to history
+    conversation_history.append({"role": "user", "content": question})
+
+    # Build message list
+    messages = [{"role": "system", "content": system_prompt}]
+    messages.append({"role": "user", "content": stats_text})
+    messages.extend(conversation_history)
+
     try:
         response = client.chat.completions.create(
             model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": stats_text},
-                {"role": "user", "content": f"Question: {question}"},
-            ],
+            messages=messages,
         )
         answer = response.choices[0].message.content
+        # Add assistant reply to history
+        conversation_history.append({"role": "assistant", "content": answer})
     except Exception as e:
         answer = f"Error: {e}"
 
     return {"answer": answer}
-
 
 # === Serve frontend (MOUNT LAST) ===
 frontend_path = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")

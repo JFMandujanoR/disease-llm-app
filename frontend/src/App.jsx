@@ -5,28 +5,36 @@ import QABox from "./QABox";
 import { fetchDiseases, fetchData } from "./api";
 
 export default function App() {
-  const [disease, setDisease] = useState("cases"); // currently "cases" or "deaths"
+  const [dataset, setDataset] = useState("covid19"); // covid19 or measles
+  const [metric, setMetric] = useState("cases"); // cases/deaths for covid19, value for measles
   const [data, setData] = useState([]);
   const [diseases, setDiseases] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  // Load available metrics (currently only "cases" and "deaths")
+  // Load available datasets from backend
   useEffect(() => {
     fetchDiseases()
       .then((res) => {
         setDiseases(res.diseases || []);
-        if (!res.diseases.includes(disease)) {
-          setDisease(res.diseases[0] || "cases");
+        if (!res.diseases.includes(dataset)) {
+          setDataset(res.diseases[0] || "covid19");
         }
       })
       .catch((err) => console.error("Error fetching diseases:", err));
   }, []);
 
-  // Fetch data whenever the selected metric changes
+  // Update metric when dataset changes
   useEffect(() => {
-    if (!disease) return;
+    if (dataset === "measles") setMetric("value");
+    else setMetric("cases");
+  }, [dataset]);
+
+  // Fetch data whenever dataset/metric changes
+  useEffect(() => {
+    if (!dataset) return;
     setLoading(true);
-    fetchData(disease)
+
+    fetchData(dataset, metric)
       .then((res) => {
         setData(res);
         setLoading(false);
@@ -36,18 +44,18 @@ export default function App() {
         setData([]);
         setLoading(false);
       });
-  }, [disease]);
+  }, [dataset, metric]);
 
   return (
     <div style={{ padding: "1rem" }}>
       <h1>Disease LLM Explorer 🦠</h1>
 
-      {/* Metric selector */}
+      {/* Dataset selector */}
       <label style={{ display: "block", marginBottom: "1rem" }}>
-        Select metric to visualize:
+        Select disease dataset:
         <select
-          value={disease}
-          onChange={(e) => setDisease(e.target.value)}
+          value={dataset}
+          onChange={(e) => setDataset(e.target.value)}
           style={{ marginLeft: "0.5rem" }}
         >
           {diseases.map((d) => (
@@ -57,6 +65,21 @@ export default function App() {
           ))}
         </select>
       </label>
+
+      {/* Metric selector (only if covid19 is chosen) */}
+      {dataset === "covid19" && (
+        <label style={{ display: "block", marginBottom: "1rem" }}>
+          Select metric to visualize:
+          <select
+            value={metric}
+            onChange={(e) => setMetric(e.target.value)}
+            style={{ marginLeft: "0.5rem" }}
+          >
+            <option value="cases">cases</option>
+            <option value="deaths">deaths</option>
+          </select>
+        </label>
+      )}
 
       <div
         style={{
@@ -84,7 +107,7 @@ export default function App() {
               No data available.
             </p>
           ) : (
-            <MapView data={data} disease={disease} />
+            <MapView data={data} dataset={dataset} metric={metric} />
           )}
         </div>
 
