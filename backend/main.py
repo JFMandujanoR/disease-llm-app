@@ -108,13 +108,28 @@ def get_diseases():
     return {"diseases": ["cases", "deaths"]}
 
 @app.get("/api/data")
-def get_data(disease: str = "cases", start: str = None, end: str = None):
+def get_data(dataset: str = "covid19", metric: str = "cases", start: str = None, end: str = None):
     data = df.copy()
+
+    # Select column based on dataset
+    if dataset == "covid19":
+        col = metric  # "cases" or "deaths"
+    elif dataset == "measles":
+        col = "value"  # measles column is "value"
+    else:
+        col = metric  # fallback
+
     if start:
         data = data[data["date"] >= start]
     if end:
         data = data[data["date"] <= end]
-    return data[["date", "state", disease, "lat", "lon"]].to_dict(orient="records")
+
+    # Only return columns that exist
+    columns = ["date", "state", "lat", "lon"]
+    if col in data.columns:
+        columns.insert(2, col)
+    return data[columns].to_dict(orient="records")
+
 
 @app.get("/api/diseases")
 def get_diseases():
