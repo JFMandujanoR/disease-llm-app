@@ -33,13 +33,13 @@ export default function MapView({ data, disease, metric }) {
           <CircleMarker
             key={i}
             center={[d.lat, d.lon]}
-            radius={Math.sqrt(d[valueField] || 0) / 100 + 5} // scale marker size
-            fillColor={fillColor}
+            radius={Math.sqrt(d.value) / 100 + 5}
+            fillColor="red"
             fillOpacity={0.5}
             stroke={false}
           >
             <Tooltip>
-              {`${d.state || d.location_name} | ${valueField}: ${d[valueField]} | Date: ${d.date}`}
+              {`${d.state} | ${dataset}: ${d.value} | Date: ${d.date}`}
             </Tooltip>
           </CircleMarker>
         ))}

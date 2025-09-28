@@ -109,26 +109,25 @@ def get_diseases():
 
 @app.get("/api/data")
 def get_data(dataset: str = "covid19", metric: str = "cases", start: str = None, end: str = None):
-    data = df.copy()
-
-    # Select column based on dataset
     if dataset == "covid19":
-        col = metric  # "cases" or "deaths"
+        data = df.copy()
+        if start:
+            data = data[data["date"] >= start]
+        if end:
+            data = data[data["date"] <= end]
+        return data[["date", "state", metric, "lat", "lon"]].rename(columns={metric: "value"}).to_dict(orient="records")
+    
     elif dataset == "measles":
-        col = "value"  # measles column is "value"
+        measles_path = os.path.join(os.path.dirname(__file__), "data", "measles.parquet")
+        df_measles = pd.read_parquet(measles_path)
+        if start:
+            df_measles = df_measles[df_measles["date"] >= start]
+        if end:
+            df_measles = df_measles[df_measles["date"] <= end]
+        return df_measles[["date", "state", "cases", "lat", "lon"]].rename(columns={"cases": "value"}).to_dict(orient="records")
+    
     else:
-        col = metric  # fallback
-
-    if start:
-        data = data[data["date"] >= start]
-    if end:
-        data = data[data["date"] <= end]
-
-    # Only return columns that exist
-    columns = ["date", "state", "lat", "lon"]
-    if col in data.columns:
-        columns.insert(2, col)
-    return data[columns].to_dict(orient="records")
+        return []
 
 
 @app.get("/api/diseases")
