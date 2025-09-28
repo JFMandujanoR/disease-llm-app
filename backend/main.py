@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import pandas as pd
@@ -21,6 +21,7 @@ DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 COVID_PATH = os.path.join(DATA_DIR, "processed.parquet")
 MEASLES_PATH = os.path.join(DATA_DIR, "measles.parquet")
 
+# State coordinates for mapping
 state_coords = {
     "Alabama": (-86.7911, 32.8067),
     "Alaska": (-152.4044, 61.3707),
@@ -72,36 +73,38 @@ state_coords = {
     "West Virginia": (-80.4549, 38.5976),
     "Wisconsin": (-88.7879, 43.7844),
     "Wyoming": (-107.2903, 43.0759),
-    "District of Columbia": (-77.0369, 38.9072)
+    "District of Columbia": (-77.0369, 38.9072),
 }
 
-df["lon"] = df["state"].map(lambda s: state_coords.get(s, (0, 0))[0])
-df["lat"] = df["state"].map(lambda s: state_coords.get(s, (0, 0))[1])
+# === Utility: load dataset with coords ===
+def load_dataset(path, metric="cases"):
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail=f"{path} not found")
+    df = pd.read_parquet(path)
+    if "lat" not in df.columns or "lon" not in df.columns:
+        df["lon"] = df["state"].map(lambda s: state_coords.get(s, (0, 0))[0])
+        df["lat"] = df["state"].map(lambda s: state_coords.get(s, (0, 0))[1])
+    return df
 
-# === Precompute spatiotemporal summaries ===
-summary = df.groupby(["date", "state"])[["cases", "deaths"]].sum().reset_index()
+# === Utility: summarize dataset for context ===
+def summarize_dataset(df: pd.DataFrame, dataset: str, metric: str) -> str:
+    if df.empty:
+        return f"The {dataset} dataset is empty."
 
-summary_sorted = summary.sort_values(["state", "date"])
-summary_sorted["cases_diff"] = summary_sorted.groupby("state")["cases"].diff().fillna(0)
-summary_sorted["deaths_diff"] = summary_sorted.groupby("state")["deaths"].diff().fillna(0)
+    latest_date = df["date"].max() if "date" in df.columns else None
+    total = df[metric].sum()
+    max_state = df.groupby("state")[metric].sum().idxmax()
+    max_val = df.groupby("state")[metric].sum().max()
 
-global_totals = summary.groupby("date")[["cases", "deaths"]].sum().reset_index()
-
-spatial_corrs = summary.pivot(index="state", columns="date", values="cases").corr().fillna(0)
-
-stats_text = (
-    "You can answer questions about cases and deaths per state over time, "
-    "identify temporal trends, compute spatial correlations between states, "
-    "and compare different months or regions.\n\n"
-    "Global totals per month:\n" + global_totals.to_csv(index=False) + "\n"
-    "State-level data (including month-to-month differences):\n" +
-    summary_sorted.to_csv(index=False) + "\n"
-    "Spatial correlation between states (cases):\n" +
-    spatial_corrs.to_csv()
-)
-
-# === Conversation memory (in-memory) ===
-conversation_history = []
+    summary = (
+        f"The dataset is {dataset}. "
+        f"It has {len(df)} records. "
+        f"Total {metric}: {total:,}. "
+        f"Highest cumulative {metric} is in {max_state} with {max_val:,}. "
+    )
+    if latest_date:
+        summary += f"The most recent date in the dataset is {latest_date}. "
+    return summary
 
 # === API routes ===
 @app.get("/api/diseases")
@@ -111,78 +114,51 @@ def get_diseases():
 @app.get("/api/data")
 def get_data(dataset: str = "covid19", metric: str = "cases", start: str = None, end: str = None):
     if dataset == "covid19":
-        data = df.copy()
-        if start:
-            data = data[data["date"] >= start]
-        if end:
-            data = data[data["date"] <= end]
-        return data[["date", "state", metric, "lat", "lon"]].rename(columns={metric: "value"}).to_dict(orient="records")
-    
+        df = load_dataset(COVID_PATH)
     elif dataset == "measles":
-        measles_path = os.path.join(os.path.dirname(__file__), "data", "measles.parquet")
-        df_measles = pd.read_parquet(measles_path)
-        if start:
-            df_measles = df_measles[df_measles["date"] >= start]
-        if end:
-            df_measles = df_measles[df_measles["date"] <= end]
-        return df_measles[["date", "state", "cases", "lat", "lon"]].rename(columns={"cases": "value"}).to_dict(orient="records")
-    
+        df = load_dataset(MEASLES_PATH)
+        metric = "cases" if "cases" in df.columns else "value"
     else:
-        return []
-
-
-# === Routes ===
-@app.get("/api/diseases")
-def get_diseases():
-    return {"diseases": ["covid19", "measles"]}
-
-
-@app.get("/api/data")
-def get_data(disease: str = "covid19", metric: str = "cases", start: str = None, end: str = None):
-    if disease == "covid19":
-        if not os.path.exists(COVID_PATH):
-            raise HTTPException(status_code=404, detail="covid19 parquet not found")
-        data = pd.read_parquet(COVID_PATH)
-    elif disease == "measles":
-        if not os.path.exists(MEASLES_PATH):
-            raise HTTPException(status_code=404, detail="measles parquet not found")
-        data = pd.read_parquet(MEASLES_PATH)
-        # add coords if missing
-        if "lat" not in data.columns or "lon" not in data.columns:
-            data["lon"] = data["state"].map(lambda s: state_coords.get(s, (0, 0))[0])
-            data["lat"] = data["state"].map(lambda s: state_coords.get(s, (0, 0))[1])
-    else:
-        raise HTTPException(status_code=400, detail="Disease not supported")
+        raise HTTPException(status_code=400, detail="Dataset not supported")
 
     if start:
-        data = data[data["date"] >= start]
+        df = df[df["date"] >= start]
     if end:
-        data = data[data["date"] <= end]
+        df = df[df["date"] <= end]
 
-    # Normalize column
-    if metric in data.columns:
-        col = metric
-    elif "cases" in data.columns:
-        col = "cases"
-    elif "value" in data.columns:
-        col = "value"
-    else:
-        raise HTTPException(status_code=400, detail="No usable metric column found")
+    if metric not in df.columns:
+        raise HTTPException(status_code=400, detail=f"Metric {metric} not in dataset")
 
-    return data[["date", "state", col, "lat", "lon"]].rename(columns={col: "value"}).to_dict(orient="records")
+    return df[["date", "state", metric, "lat", "lon"]].rename(columns={metric: "value"}).to_dict(orient="records")
 
+# === Conversation memory ===
+conversation_history = []
 
-# === LLM Q&A route with memory ===
 @app.post("/api/ask")
-async def ask_question(request: Request):
+async def ask(request: Request):
     body = await request.json()
     question = body.get("question", "")
+    dataset = body.get("dataset", "covid19")
+    metric = body.get("metric", "cases")
+
+    # Load the dataset for context
+    if dataset == "covid19":
+        df = load_dataset(COVID_PATH)
+    elif dataset == "measles":
+        df = load_dataset(MEASLES_PATH)
+        metric = "cases" if "cases" in df.columns else "value"
+    else:
+        raise HTTPException(status_code=400, detail="Dataset not supported")
+
+    if metric not in df.columns:
+        return {"answer": f"Metric {metric} not found in {dataset} dataset."}
+
+    context_summary = summarize_dataset(df, dataset, metric)
 
     system_prompt = (
-        "You are a helpful assistant answering questions about a spatiotemporal disease dataset "
-        "with cases and deaths per state over time. "
-        "You can answer questions about trends, correlations, totals, and comparisons. "
-        "Use the dataset provided to answer clearly and concisely."
+        f"You are a helpful assistant answering questions about {dataset} data. "
+        f"The key metric is {metric}. "
+        f"Here is a quick summary you can use for context: {context_summary}"
     )
 
     api_key = os.getenv("OPENAI_API_KEY")
@@ -191,13 +167,8 @@ async def ask_question(request: Request):
 
     client = OpenAI(api_key=api_key)
 
-    # Add user message to history
     conversation_history.append({"role": "user", "content": question})
-
-    # Build message list
-    messages = [{"role": "system", "content": system_prompt}]
-    messages.append({"role": "user", "content": stats_text})
-    messages.extend(conversation_history)
+    messages = [{"role": "system", "content": system_prompt}] + conversation_history
 
     try:
         response = client.chat.completions.create(
@@ -205,7 +176,6 @@ async def ask_question(request: Request):
             messages=messages,
         )
         answer = response.choices[0].message.content
-        # Add assistant reply to history
         conversation_history.append({"role": "assistant", "content": answer})
     except Exception as e:
         answer = f"Error: {e}"
