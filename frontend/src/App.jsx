@@ -114,7 +114,7 @@ export default function App() {
 
         {/* Chat on the right */}
         <div style={{ flex: 1 }}>
-          <QABox />
+          <QABox dataset={dataset} metric={metric} />
         </div>
       </div>
     </div>

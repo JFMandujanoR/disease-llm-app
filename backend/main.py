@@ -16,9 +16,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# === Load data ===
-DATA_PATH = os.path.join(os.path.dirname(__file__), "data", "processed.parquet")
-df = pd.read_parquet(DATA_PATH)
+# === Paths ===
+DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
+COVID_PATH = os.path.join(DATA_DIR, "processed.parquet")
+MEASLES_PATH = os.path.join(DATA_DIR, "measles.parquet")
 
 state_coords = {
     "Alabama": (-86.7911, 32.8067),
@@ -130,35 +131,45 @@ def get_data(dataset: str = "covid19", metric: str = "cases", start: str = None,
         return []
 
 
+# === Routes ===
 @app.get("/api/diseases")
 def get_diseases():
     return {"diseases": ["covid19", "measles"]}
 
-@app.get("/api/data")
-def get_data(disease: str = "covid19", start: str = None, end: str = None):
-    if disease == "covid19":
-        data_path = os.path.join(os.path.dirname(__file__), "data", "processed.parquet")
-    elif disease == "measles":
-        data_path = os.path.join(os.path.dirname(__file__), "data", "measles.parquet")
-    else:
-        return {"error": "Disease not supported"}
 
-    data = pd.read_parquet(data_path)
+@app.get("/api/data")
+def get_data(disease: str = "covid19", metric: str = "cases", start: str = None, end: str = None):
+    if disease == "covid19":
+        if not os.path.exists(COVID_PATH):
+            raise HTTPException(status_code=404, detail="covid19 parquet not found")
+        data = pd.read_parquet(COVID_PATH)
+    elif disease == "measles":
+        if not os.path.exists(MEASLES_PATH):
+            raise HTTPException(status_code=404, detail="measles parquet not found")
+        data = pd.read_parquet(MEASLES_PATH)
+        # add coords if missing
+        if "lat" not in data.columns or "lon" not in data.columns:
+            data["lon"] = data["state"].map(lambda s: state_coords.get(s, (0, 0))[0])
+            data["lat"] = data["state"].map(lambda s: state_coords.get(s, (0, 0))[1])
+    else:
+        raise HTTPException(status_code=400, detail="Disease not supported")
 
     if start:
         data = data[data["date"] >= start]
     if end:
         data = data[data["date"] <= end]
 
-    # Try to infer columns
-    if "cases" in data.columns:
-        disease_col = "cases"
-    elif "value" in data.columns:  # measles format
-        disease_col = "value"
+    # Normalize column
+    if metric in data.columns:
+        col = metric
+    elif "cases" in data.columns:
+        col = "cases"
+    elif "value" in data.columns:
+        col = "value"
     else:
-        return {"error": "Disease column not found"}
+        raise HTTPException(status_code=400, detail="No usable metric column found")
 
-    return data[["date", "state", disease_col, "lat", "lon"]].to_dict(orient="records")
+    return data[["date", "state", col, "lat", "lon"]].rename(columns={col: "value"}).to_dict(orient="records")
 
 
 # === LLM Q&A route with memory ===
