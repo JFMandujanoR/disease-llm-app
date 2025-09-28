@@ -8,25 +8,26 @@ export default function App() {
   const [dataset, setDataset] = useState("covid19"); // covid19 or measles
   const [metric, setMetric] = useState("cases"); // cases/deaths for covid19, value for measles
   const [data, setData] = useState([]);
-  const [diseases, setDiseases] = useState([]);
+  const [metrics, setMetrics] = useState([]); // available metrics for covid19
   const [loading, setLoading] = useState(false);
 
-  // Load available datasets from backend
+  // Load available metrics for covid19 from backend
   useEffect(() => {
     fetchDiseases()
       .then((res) => {
-        setDiseases(res.diseases || []);
-        if (!res.diseases.includes(dataset)) {
-          setDataset(res.diseases[0] || "covid19");
-        }
+        // backend returns { diseases: ["cases","deaths"] } meaning metrics
+        setMetrics(res.diseases || []);
       })
-      .catch((err) => console.error("Error fetching diseases:", err));
+      .catch((err) => console.error("Error fetching metrics:", err));
   }, []);
 
   // Update metric when dataset changes
   useEffect(() => {
-    if (dataset === "measles") setMetric("value");
-    else setMetric("cases");
+    if (dataset === "measles") {
+      setMetric("value"); // measles only has one metric
+    } else {
+      setMetric("cases"); // default covid19 metric
+    }
   }, [dataset]);
 
   // Fetch data whenever dataset/metric changes
@@ -58,11 +59,8 @@ export default function App() {
           onChange={(e) => setDataset(e.target.value)}
           style={{ marginLeft: "0.5rem" }}
         >
-          {diseases.map((d) => (
-            <option key={d} value={d}>
-              {d}
-            </option>
-          ))}
+          <option value="covid19">covid19</option>
+          <option value="measles">measles</option>
         </select>
       </label>
 
@@ -75,8 +73,11 @@ export default function App() {
             onChange={(e) => setMetric(e.target.value)}
             style={{ marginLeft: "0.5rem" }}
           >
-            <option value="cases">cases</option>
-            <option value="deaths">deaths</option>
+            {metrics.map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
           </select>
         </label>
       )}
