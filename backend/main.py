@@ -112,6 +112,16 @@ def summarize_dataset(df: pd.DataFrame, dataset: str, metric: str) -> str:
 def get_diseases():
     return {"diseases": ["cases", "deaths"]}
 
+@app.get("/api/columns")
+def get_columns(dataset: str = "measles"):
+    if dataset == "measles":
+        df = load_dataset(MEASLES_PATH)
+    elif dataset == "covid19":
+        df = load_dataset(COVID_PATH)
+    else:
+        raise HTTPException(status_code=400, detail="Dataset not supported")
+    return {"columns": df.columns.tolist(), "head": df.head(5).to_dict(orient="records")}
+
 @app.get("/api/data")
 def get_data(
     dataset: str = "covid19",
@@ -121,19 +131,17 @@ def get_data(
 ):
     if dataset == "covid19":
         df = load_dataset(COVID_PATH)
-        # default metric if not provided
         if metric is None:
             metric = "cases"
-        if metric not in df.columns:
-            raise HTTPException(status_code=400, detail=f"Metric {metric} not in dataset")
 
     elif dataset == "measles":
         df = load_dataset(MEASLES_PATH)
-        # measles typically only has one column of values
-        if metric is None:
-            metric = "cases" if "cases" in df.columns else "value"
-        if metric not in df.columns:
-            raise HTTPException(status_code=400, detail=f"Metric {metric} not in dataset")
+        # If user didn’t provide metric, pick the first numeric column
+        if metric is None or metric not in df.columns:
+            numeric_cols = df.select_dtypes(include=["number"]).columns
+            if len(numeric_cols) == 0:
+                raise HTTPException(status_code=400, detail="No numeric metric found in measles dataset")
+            metric = numeric_cols[0]  # pick first numeric column
 
     else:
         raise HTTPException(status_code=400, detail="Dataset not supported")
@@ -143,6 +151,9 @@ def get_data(
         df = df[df["date"] >= start]
     if end:
         df = df[df["date"] <= end]
+
+    if metric not in df.columns:
+        raise HTTPException(status_code=400, detail=f"Metric {metric} not in dataset")
 
     return (
         df[["date", "state", metric, "lat", "lon"]]
