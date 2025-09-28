@@ -4,6 +4,7 @@ from fastapi.staticfiles import StaticFiles
 import pandas as pd
 import os
 from openai import OpenAI
+from typing import Optional
 
 app = FastAPI()
 
@@ -112,24 +113,42 @@ def get_diseases():
     return {"diseases": ["cases", "deaths"]}
 
 @app.get("/api/data")
-def get_data(dataset: str = "covid19", metric: str = "cases", start: str = None, end: str = None):
+def get_data(
+    dataset: str = "covid19",
+    metric: Optional[str] = None,
+    start: Optional[str] = None,
+    end: Optional[str] = None,
+):
     if dataset == "covid19":
         df = load_dataset(COVID_PATH)
+        # default metric if not provided
+        if metric is None:
+            metric = "cases"
+        if metric not in df.columns:
+            raise HTTPException(status_code=400, detail=f"Metric {metric} not in dataset")
+
     elif dataset == "measles":
         df = load_dataset(MEASLES_PATH)
-        metric = "cases" if "cases" in df.columns else "value"
+        # measles typically only has one column of values
+        if metric is None:
+            metric = "cases" if "cases" in df.columns else "value"
+        if metric not in df.columns:
+            raise HTTPException(status_code=400, detail=f"Metric {metric} not in dataset")
+
     else:
         raise HTTPException(status_code=400, detail="Dataset not supported")
 
+    # filter by time if provided
     if start:
         df = df[df["date"] >= start]
     if end:
         df = df[df["date"] <= end]
 
-    if metric not in df.columns:
-        raise HTTPException(status_code=400, detail=f"Metric {metric} not in dataset")
-
-    return df[["date", "state", metric, "lat", "lon"]].rename(columns={metric: "value"}).to_dict(orient="records")
+    return (
+        df[["date", "state", metric, "lat", "lon"]]
+        .rename(columns={metric: "value"})
+        .to_dict(orient="records")
+    )
 
 # === Conversation memory ===
 conversation_history = []

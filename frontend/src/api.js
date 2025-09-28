@@ -7,11 +7,10 @@ export async function fetchDiseases() {
 }
 
 // frontend/src/api.js
-export async function fetchData(dataset = "covid19", metric = "cases") {
-  let url = `${__API_BASE__}/api/data?dataset=${dataset}`;
-  if (dataset === "covid19") {
-    url += `&metric=${metric}`;
-  }
+export async function fetchData(dataset, metric = null) {
+  const url = metric
+    ? `${__API_BASE__}/api/data?dataset=${dataset}&metric=${metric}`
+    : `${__API_BASE__}/api/data?dataset=${dataset}`;
   const res = await fetch(url);
   return res.json();
 }
