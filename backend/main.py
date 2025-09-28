@@ -88,24 +88,26 @@ def load_dataset(path, metric="cases"):
     return df
 
 # === Utility: summarize dataset for context ===
-def summarize_dataset(df: pd.DataFrame, dataset: str, metric: str) -> str:
+def summarize_dataset(df, dataset, metric):
+    """
+    Build a small text summary for LLM context.
+    Includes global totals, per-state stats, and date range.
+    """
     if df.empty:
-        return f"The {dataset} dataset is empty."
+        return "Dataset is empty."
 
-    latest_date = df["date"].max() if "date" in df.columns else None
     total = df[metric].sum()
-    max_state = df.groupby("state")[metric].sum().idxmax()
-    max_val = df.groupby("state")[metric].sum().max()
+    start_date = df["date"].min()
+    end_date = df["date"].max()
+    top_states = df.groupby("state")[metric].sum().sort_values(ascending=False).head(3)
 
     summary = (
-        f"The dataset is {dataset}. "
-        f"It has {len(df)} records. "
-        f"Total {metric}: {total:,}. "
-        f"Highest cumulative {metric} is in {max_state} with {max_val:,}. "
+        f"Dataset '{dataset}' from {start_date} to {end_date}. "
+        f"Total {metric}: {total}. "
+        f"Top states by {metric}: {', '.join([f'{s} ({v})' for s,v in top_states.items()])}."
     )
-    if latest_date:
-        summary += f"The most recent date in the dataset is {latest_date}. "
     return summary
+
 
 # === API routes ===
 @app.get("/api/diseases")
