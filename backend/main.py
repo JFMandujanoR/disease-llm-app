@@ -97,10 +97,10 @@ stats_text = (
     "identify temporal trends, compute spatial correlations between states, "
     "and compare different months or regions.\n\n"
     "Global totals per month:\n" + global_totals.to_csv(index=False) + "\n"
-    "Sample state-level data (including month-to-month differences):\n" +
-    summary_sorted.head(50).to_csv(index=False) + "\n"
+    "State-level data (including month-to-month differences):\n" +
+    summary_sorted.to_csv(index=False) + "\n"
     "Spatial correlation between states (cases):\n" +
-    spatial_corrs.head(5).to_csv()
+    spatial_corrs.to_csv()
 )
 
 # === Conversation memory (in-memory) ===
