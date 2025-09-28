@@ -123,30 +123,21 @@ def get_columns(dataset: str = "measles"):
     return {"columns": df.columns.tolist(), "head": df.head(5).to_dict(orient="records")}
 
 @app.get("/api/data")
-def get_data(
-    dataset: str = "covid19",
-    metric: Optional[str] = None,
-    start: Optional[str] = None,
-    end: Optional[str] = None,
-):
+def get_data(dataset: str = "covid19", metric: str = "cases", start: str = None, end: str = None):
     if dataset == "covid19":
         df = load_dataset(COVID_PATH)
-        if metric is None:
-            metric = "cases"
-
     elif dataset == "measles":
         df = load_dataset(MEASLES_PATH)
-        # If user didn’t provide metric, pick the first numeric column
-        if metric is None or metric not in df.columns:
-            numeric_cols = df.select_dtypes(include=["number"]).columns
-            if len(numeric_cols) == 0:
-                raise HTTPException(status_code=400, detail="No numeric metric found in measles dataset")
-            metric = numeric_cols[0]  # pick first numeric column
-
+        # normalize column name for frontend
+        if "case_lab-confirmed" in df.columns:
+            df = df.rename(columns={"case_lab-confirmed": "value"})
+            metric = "value"
+        else:
+            df["value"] = 0
+            metric = "value"
     else:
         raise HTTPException(status_code=400, detail="Dataset not supported")
 
-    # filter by time if provided
     if start:
         df = df[df["date"] >= start]
     if end:
@@ -155,11 +146,8 @@ def get_data(
     if metric not in df.columns:
         raise HTTPException(status_code=400, detail=f"Metric {metric} not in dataset")
 
-    return (
-        df[["date", "state", metric, "lat", "lon"]]
-        .rename(columns={metric: "value"})
-        .to_dict(orient="records")
-    )
+    return df[["date", "state", metric, "lat", "lon"]].rename(columns={metric: "value"}).to_dict(orient="records")
+
 
 # === Conversation memory ===
 conversation_history = []
