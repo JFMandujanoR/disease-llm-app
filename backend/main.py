@@ -99,7 +99,7 @@ def summarize_dataset(df, dataset, metric):
     total = df[metric].sum()
     start_date = df["date"].min()
     end_date = df["date"].max()
-    top_states = df.groupby("state")[metric].sum().sort_values(ascending=False).head(3)
+    top_states = df.groupby("state")[metric].mean().sort_values(ascending=False).head(20)
 
     summary = (
         f"Dataset '{dataset}' from {start_date} to {end_date}. "
@@ -150,9 +150,8 @@ def get_data(dataset: str = "covid19", metric: str = "cases", start: str = None,
 
     return df[["date", "state", metric, "lat", "lon"]].rename(columns={metric: "value"}).to_dict(orient="records")
 
-
 # === Conversation memory ===
-conversation_history = []
+conversation_histories = {}
 
 @app.post("/api/ask")
 async def ask(request: Request):
@@ -161,12 +160,17 @@ async def ask(request: Request):
     dataset = body.get("dataset", "covid19")
     metric = body.get("metric", "cases")
 
-    # Load the dataset for context
+    # Load the dataset
     if dataset == "covid19":
         df = load_dataset(COVID_PATH)
     elif dataset == "measles":
         df = load_dataset(MEASLES_PATH)
-        metric = "cases" if "cases" in df.columns else "value"
+        if "case_lab-confirmed" in df.columns:
+            df = df.rename(columns={"case_lab-confirmed": "value"})
+            metric = "value"
+        else:
+            df["value"] = 0
+            metric = "value"
     else:
         raise HTTPException(status_code=400, detail="Dataset not supported")
 
@@ -187,8 +191,13 @@ async def ask(request: Request):
 
     client = OpenAI(api_key=api_key)
 
-    conversation_history.append({"role": "user", "content": question})
-    messages = [{"role": "system", "content": system_prompt}] + conversation_history
+    # Use dataset-specific history
+    if dataset not in conversation_histories:
+        conversation_histories[dataset] = []
+    history = conversation_histories[dataset]
+
+    history.append({"role": "user", "content": question})
+    messages = [{"role": "system", "content": system_prompt}] + history
 
     try:
         response = client.chat.completions.create(
@@ -196,7 +205,7 @@ async def ask(request: Request):
             messages=messages,
         )
         answer = response.choices[0].message.content
-        conversation_history.append({"role": "assistant", "content": answer})
+        history.append({"role": "assistant", "content": answer})
     except Exception as e:
         answer = f"Error: {e}"
 
