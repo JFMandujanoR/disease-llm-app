@@ -8,22 +8,34 @@ export default function MapView({ data, dataset, metric }) {
 
   const valueField = dataset === "covid19" ? metric : "value";
 
-  // Build a list of valid dates (filter out null/undefined/NaT/invalid)
-  const dates = useMemo(() => {
-    const raw = data
-      .map((d) => d.date)
-      .filter((dt) => dt !== null && dt !== undefined && dt !== "NaT" && dt !== "NaN");
-
-    // Keep only dates that parse as valid JS dates
-    const valid = raw.filter((dt) => {
-      // If it's already a Date-ish ISO string this will work; fall back to string check
+  // Normalize dates and group records by ISO date string. This avoids showing invalid
+  // values like "NaT" in the slider and ensures comparisons are consistent.
+  const { dates, grouped } = useMemo(() => {
+    const normalize = (dt) => {
+      if (dt === null || dt === undefined) return null;
+      // Raw strings like "NaT" or strings containing NaT
+      if (typeof dt === "string") {
+        const s = dt.trim();
+        if (!s) return null;
+        if (/nat/i.test(s) || s.toLowerCase() === "nan") return null;
+      }
+      // Try to parse into a Date
       const parsed = new Date(dt);
-      return !Number.isNaN(parsed.getTime());
-    });
+      if (Number.isNaN(parsed.getTime())) return null;
+      // Use full ISO so grouping is unambiguous
+      return parsed.toISOString();
+    };
 
-    const uniq = Array.from(new Set(valid));
-    uniq.sort((a, b) => new Date(a) - new Date(b));
-    return uniq;
+    const map = {};
+    for (const rec of data) {
+      const iso = normalize(rec.date);
+      if (!iso) continue;
+      if (!map[iso]) map[iso] = [];
+      map[iso].push(rec);
+    }
+
+    const ds = Object.keys(map).sort((a, b) => new Date(a) - new Date(b));
+    return { dates: ds, grouped: map };
   }, [data]);
 
   // If timeIndex is out of range (e.g. after filtering), clamp it
@@ -32,8 +44,8 @@ export default function MapView({ data, dataset, metric }) {
 
   const currentData = useMemo(() => {
     if (!currentDate) return [];
-    return data.filter((d) => d.date === currentDate);
-  }, [data, currentDate]);
+    return grouped[currentDate] || [];
+  }, [grouped, currentDate]);
 
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
@@ -56,7 +68,7 @@ export default function MapView({ data, dataset, metric }) {
               stroke={false}
             >
               <Tooltip>
-                {`${d.state} | ${dataset}: ${displayVal} | Date: ${d.date}`}
+                {`${d.state} | ${dataset}: ${displayVal} | Date: ${currentDate ? new Date(currentDate).toLocaleString() : "unknown"}`}
               </Tooltip>
             </CircleMarker>
           );
@@ -76,7 +88,7 @@ export default function MapView({ data, dataset, metric }) {
               onChange={(e) => setTimeIndex(Number(e.target.value))}
               style={{ width: "100%" }}
             />
-            <p style={{ textAlign: "center" }}>{currentDate}</p>
+            <p style={{ textAlign: "center" }}>{currentDate ? new Date(currentDate).toLocaleString() : ""}</p>
           </>
         )}
       </div>

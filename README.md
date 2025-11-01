@@ -73,6 +73,80 @@ Visit the Vite dev server (typically http://localhost:5173) to use the app with 
 
 ```bash
 cd frontend
+# Disease LLM Explorer
+
+Live demo: https://disease-llm-app.onrender.com
+
+Small web prototype that uses an LLM to answer natural-language questions about spatiotemporal disease data and visualize the data on a map. The app supports two datasets (both sourced from Johns Hopkins CSSE projects):
+
+- COVID-19 (JHU CSSE COVID-19 repository): https://github.com/CSSEGISandData/COVID-19
+- Measles (JHU CSSE measles_data repository): https://github.com/CSSEGISandData/measles_data
+
+The repository includes a small COVID sample CSV (`backend/data/covid_sample.csv`) and an `ingest.py` script that converts that sample into `backend/data/processed.parquet`. If you want to use the full JHU COVID-19 time-series data, download the appropriate CSV from the JHU COVID-19 repo and replace or point `ingest.py` at that file before running it. Use `backend/ingest_measles.py` to download and process the measles CSV from the measles_data repo into `backend/data/measles.parquet`.
+
+Features
+
+- Interactive map with time slider and circle markers by state
+- Dataset selector (covid19 or measles) and metric selector (cases/deaths for covid)
+- Time slider to explore values over dates
+- QA/chat box that sends a question to the backend LLM endpoint; backend provides a dataset summary as context for the LLM
+
+The backend is a FastAPI app that serves dataset APIs and an `/api/ask` endpoint which forwards a conversation + dataset summary to the OpenAI API. The frontend is a small React app (Vite) that consumes these APIs and renders the map and QA UI.
+
+Important: the QA/chat feature requires an OpenAI API key in the environment (see Run locally below). If no key is set the backend responds with a helpful message.
+
+Quick status
+- Frontend: React + Vite, components `MapView` and `QABox` provide the main UI.
+- Backend: FastAPI app in `backend/main.py` exposing `/api/diseases`, `/api/data`, `/api/ask` and optionally serving the built frontend from `frontend/dist` when present.
+- Data: processed parquet files are expected in `backend/data` (see ingest scripts).
+
+Run locally
+Prereqs
+- Python 3.8+ and pip
+- Node.js (recommended 16+ or current LTS)
+
+1) Start the backend
+
+```bash
+# change into the backend folder
+cd backend
+
+# (optional) create and activate a virtualenv
+python -m venv .venv
+source .venv/bin/activate
+
+# install Python deps
+pip install -r requirements.txt
+
+# create processed dataset used by the app (covid sample)
+python ingest.py
+
+# optionally create measles parquet (downloads/processes remote CSV from the CSSE repo)
+python ingest_measles.py
+
+# set your OpenAI key (required to use the /api/ask chat feature)
+export OPENAI_API_KEY="sk-..."
+
+# run the backend (default example uses port 10000)
+uvicorn main:app --reload --port 10000
+```
+
+The backend will expose APIs at http://localhost:10000 (or whichever port you choose).
+
+2) Start the frontend (development)
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Visit the Vite dev server (typically http://localhost:5173) to use the app with hot-reload.
+
+3) Build frontend and serve via backend (optional)
+
+```bash
+cd frontend
 npm run build
 
 # after building, the backend will serve the built files from ../frontend/dist
@@ -91,10 +165,3 @@ Notes & caveats
 - The chat endpoint uses the OpenAI client and requires `OPENAI_API_KEY` to be set. If not set the endpoint returns a message telling you to set it.
 - The app is a demo/prototype and may not be robust for production traffic. Be mindful of OpenAI usage/quotas when testing the QA feature.
 
-If you'd like, I can:
-- add a small startup script that runs ingestion then starts uvicorn
-- add a brief troubleshooting section for common errors (CORS, missing data files, build issues)
-
-Enjoy exploring the data!
-
-```
