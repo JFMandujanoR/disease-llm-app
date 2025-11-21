@@ -48,72 +48,45 @@ export default function App() {
   }, [dataset, metric]);
 
   return (
-    <div style={{ padding: "1rem" }}>
+    <div className="app">
       <h1>Disease LLM Explorer 🦠</h1>
+      <p className="subtitle">Interactive map + LLM-powered Q&A over epidemiological time-series data</p>
 
-      {/* Dataset selector */}
-      <label style={{ display: "block", marginBottom: "1rem" }}>
-        Select disease dataset:
-        <select
-          value={dataset}
-          onChange={(e) => setDataset(e.target.value)}
-          style={{ marginLeft: "0.5rem" }}
-        >
-          <option value="covid19">covid19</option>
-          <option value="measles">measles</option>
-        </select>
-      </label>
-
-      {/* Metric selector (only if covid19 is chosen) */}
-      {dataset === "covid19" && (
-        <label style={{ display: "block", marginBottom: "1rem" }}>
-          Select metric to visualize:
-          <select
-            value={metric}
-            onChange={(e) => setMetric(e.target.value)}
-            style={{ marginLeft: "0.5rem" }}
-          >
-            {metrics.map((m) => (
-              <option key={m} value={m}>
-                {m}
-              </option>
-            ))}
+      <div className="controls">
+        <label className="control-label">
+          Select dataset:
+          <select value={dataset} onChange={(e) => setDataset(e.target.value)} className="select">
+            <option value="covid19">covid19</option>
+            <option value="measles">measles</option>
           </select>
         </label>
-      )}
 
-      <div
-        style={{
-          display: "flex",
-          gap: "1rem",
-          height: "80vh", // map/chat container height
-        }}
-      >
-        {/* Map on the left */}
-        <div
-          style={{
-            flex: 2,
-            border: "1px solid #ccc",
-            borderRadius: "8px",
-            display: "flex",
-            flexDirection: "column",
-          }}
-        >
+        {dataset === "covid19" && (
+          <label className="control-label">
+            Metric:
+            <select value={metric} onChange={(e) => setMetric(e.target.value)} className="select">
+              {metrics.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+      </div>
+
+      <div className="main-grid">
+        <div className="panel map-panel">
           {loading ? (
-            <p style={{ textAlign: "center", marginTop: "1rem" }}>
-              Loading data...
-            </p>
+            <p className="small-muted">Loading data...</p>
           ) : data.length === 0 ? (
-            <p style={{ textAlign: "center", marginTop: "1rem" }}>
-              No data available.
-            </p>
+            <p className="small-muted">No data available.</p>
           ) : (
             <MapView data={data} dataset={dataset} metric={metric} />
           )}
         </div>
 
-        {/* Chat on the right */}
-        <div style={{ flex: 1 }}>
+        <div className="panel qa-panel">
           <QABox dataset={dataset} metric={metric} />
         </div>
       </div>

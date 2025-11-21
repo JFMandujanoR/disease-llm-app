@@ -48,10 +48,10 @@ export default function MapView({ data, dataset, metric }) {
   }, [grouped, currentDate]);
 
   return (
-    <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
-      <h2>Disease Map - {dataset.toUpperCase()}</h2>
+    <div className="map-view" style={{ height: "100%" }}>
+      <h2 className="map-header">Disease Map - {dataset.toUpperCase()}</h2>
 
-      <MapContainer center={[37.8, -96]} zoom={4} style={{ flex: 1 }}>
+      <MapContainer center={[37.8, -96]} zoom={4} className="leaflet-container">
         <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
         {currentData.map((d, i) => {
           // Ensure numeric value; skip invalid numbers
@@ -63,7 +63,7 @@ export default function MapView({ data, dataset, metric }) {
               key={i}
               center={[d.lat, d.lon]}
               radius={Math.sqrt(displayVal) / 100 + 5}
-              fillColor={dataset === "covid19" ? "red" : "blue"}
+              fillColor={dataset === "covid19" ? "#ef4444" : "#2563eb"}
               fillOpacity={0.5}
               stroke={false}
             >
@@ -75,7 +75,7 @@ export default function MapView({ data, dataset, metric }) {
         })}
       </MapContainer>
 
-      <div style={{ marginTop: "1rem" }}>
+      <div className="slider-row" style={{ marginTop: "1rem" }}>
         {dates.length === 0 ? (
           <p style={{ textAlign: "center", marginTop: "0.5rem" }}>No valid dates available.</p>
         ) : (
@@ -86,7 +86,7 @@ export default function MapView({ data, dataset, metric }) {
               max={dates.length - 1}
               value={safeTimeIndex}
               onChange={(e) => setTimeIndex(Number(e.target.value))}
-              style={{ width: "100%" }}
+              className="slider"
             />
             <p style={{ textAlign: "center" }}>{currentDate ? new Date(currentDate).toLocaleString() : ""}</p>
           </>
