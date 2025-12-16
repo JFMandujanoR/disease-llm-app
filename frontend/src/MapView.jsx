@@ -47,6 +47,16 @@ export default function MapView({ data, dataset, metric }) {
     return grouped[currentDate] || [];
   }, [grouped, currentDate]);
 
+  // Debug: log sample records to console for diagnosis
+  console.log("MapView debug:", {
+    totalRecords: data.length,
+    availableDates: dates.length,
+    currentDate,
+    currentSliceCount: currentData.length,
+    sampleFirstRecords: data.slice(0, 5).map((r) => ({ state: r.state, date: r.date, lat: r.lat, lon: r.lon, value: r.value })),
+    sampleCurrent: currentData.slice(0, 5).map((r) => ({ state: r.state, lat: r.lat, lon: r.lon, value: r.value })),
+  });
+
   return (
     <div className="map-view" style={{ height: "100%" }}>
       <h2 className="map-header">Disease Map - {dataset.toUpperCase()}</h2>
