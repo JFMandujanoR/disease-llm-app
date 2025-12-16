@@ -51,6 +51,13 @@ export default function MapView({ data, dataset, metric }) {
     <div className="map-view" style={{ height: "100%" }}>
       <h2 className="map-header">Disease Map - {dataset.toUpperCase()}</h2>
 
+      {/* Debug info: shows record counts and date counts to help diagnose missing data/rendering */}
+      <div style={{ display: "flex", gap: "1rem", alignItems: "center", marginBottom: "0.5rem" }}>
+        <div className="small-muted">Records: {data.length}</div>
+        <div className="small-muted">Available dates: {dates.length}</div>
+        <div className="small-muted">Current slice: {currentData.length}</div>
+      </div>
+
       <MapContainer center={[37.8, -96]} zoom={4} className="leaflet-container">
         <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
         {currentData.map((d, i) => {
