@@ -107,3 +107,7 @@ select, .select {
 
 /* leaflet canvas should inherit rounded corners */
 .map-panel .leaflet-container{ border-radius:10px; }
+
+/* Ensure the map container fills available space so Leaflet renders tiles */
+.map-view{ display:flex; flex-direction:column; height:100%; }
+.map-view .leaflet-container{ flex:1; min-height:260px; }
